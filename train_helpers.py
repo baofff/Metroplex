@@ -8,7 +8,8 @@ import time
 
 from jax.interpreters.xla import DeviceArray
 from hps import Hyperparams, parse_args_and_update_hparams, add_vae_arguments
-from utils import logger, mkdir_p, model_fn
+from utils import logger, mkdir_p
+from vqvae import VQVAE
 
 import jax
 from jax import random
@@ -20,7 +21,7 @@ from flax.optim import Adam
 from functools import partial
 from PIL import Image
 from jax import lax, pmap
-from vae_helpers import astype, sample
+from vae_helpers import sample
 import input_pipeline
 from einops import rearrange
 map = safe_map
@@ -46,7 +47,7 @@ def load_vaes(H, logprint):
     init_rng, init_eval_rng = random.split(rng)
     init_eval_rng, init_emb_rng = random.split(init_eval_rng)
     init_batch = jnp.zeros((1, H.image_size, H.image_size, H.n_channels))
-    variables = model_fn(H).init({'params': init_rng}, init_batch, rng=init_eval_rng)
+    variables = VQVAE(H).init({'params': init_rng}, init_batch, rng=init_eval_rng)
     state, params = variables.pop('params')
     #print(jax.tree_map(jnp.shape, state))
     del variables
@@ -148,14 +149,13 @@ def clip_grad_norm(g, max_norm):
 
 def write_images(H, optimizer, ema, state, viz_batch):
     params = ema or optimizer.target
-    ema_apply = partial(model_fn(H).apply,
+    ema_apply = partial(VQVAE(H).apply,
                         {'params': params, **state}) 
-    forward_get_latents = partial(ema_apply, method=model_fn(H).forward_get_latents)
+    forward_get_latents = partial(ema_apply, method=VQVAE(H).forward_get_latents)
     forward_samples_set_latents = partial(
-        ema_apply, method=model_fn(H).forward_samples_set_latents)
+        ema_apply, method=VQVAE(H).forward_samples_set_latents)
 
     batches = [sample(viz_batch)]
-    mb = viz_batch.shape[0]
     zs = forward_get_latents(viz_batch)
     batches.append(forward_samples_set_latents(zs))
     im = jnp.stack(batches)

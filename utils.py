@@ -63,9 +63,6 @@ def tile_images(images, d1=4, d2=4, border=1):
         start_d2 = num_d2 * id2 + border * (num_d2 + 1)
         out[start_d1:start_d1 + id1, start_d2:start_d2 + id2, :] = im
     return out
-
-def model_fn(H):
-    return VQVAE(H)
         
 def mkdir_p(path):
     os.makedirs(path, exist_ok=True)

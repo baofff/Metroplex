@@ -1,7 +1,7 @@
 from functools import partial
 import jax.numpy as jnp
 from flax import linen as nn
-from vae_helpers import parse_layer_string, pad_channels, get_width_settings, Conv1x1, Conv3x3, EncBlock, checkpoint, astype, recon_loss, sample
+from vae_helpers import parse_layer_string, pad_channels, get_width_settings, Conv1x1, Conv3x3, EncBlock, checkpoint, recon_loss, sample
 from quantizer import VectorQuantizerEMA
 import hps
 import numpy as np
@@ -65,8 +65,8 @@ class VQVAE(nn.Module):
         x = self.encoder(x, train=is_training)
         rng = kwargs['rng'] if 'rng' in kwargs.keys() else None
         quant_dict = self.quantizer(x.astype(jnp.float32), is_training, rng=rng)
-        kl = astype(quant_dict['loss'], self.H)
-        px_z = self.decoder(astype(quant_dict['quantize'], self.H), train=is_training)
+        kl = quant_dict['loss'].astype(jnp.float32)
+        px_z = self.decoder(quant_dict['quantize'].astype(jnp.float32), train=is_training)
         loss = recon_loss(px_z, x_target)
         return dict(loss=loss + kl, recon_loss=loss, kl=kl), None
 
@@ -76,5 +76,5 @@ class VQVAE(nn.Module):
 
     def forward_samples_set_latents(self, latents):
         latents = self.quantizer(None, is_training=False, encoding_indices=latents)
-        px_z = self.decoder(astype(latents, self.H))
+        px_z = self.decoder(latents.astype(jnp.float32))
         return sample(px_z)

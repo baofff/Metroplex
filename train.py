@@ -7,15 +7,15 @@ from jax import tree_map, tree_multimap, device_get
 from jax import grad, lax, pmap
 from jax import random
 import jax.numpy as jnp
-from utils import model_fn
-from vae_helpers import astype
 import input_pipeline
+from vqvae import VQVAE
+
 
 def training_step(H, data, optimizer, ema, state, rng):
-    # this is for vq/vdvae only
-    
+
     def loss_fun(params, state):
-        (stats, contra), state = model_fn(H).apply({'params': params, **state}, astype(data, H), rng=rng, is_training=True, mutable=list(state.keys()))
+        (stats, contra), state = VQVAE(H).apply({'params': params, **state}, data.astype(jnp.float32),
+                                                rng=rng, is_training=True, mutable=list(state.keys()))
         loss = stats['loss']
         stats = {k: v.astype(jnp.float32) for k, v in stats.items()}
         return loss, (stats, state)
@@ -48,7 +48,6 @@ def training_step(H, data, optimizer, ema, state, rng):
 # Would use donate_argnums=(3, 4) here but compilation never finishes
 p_training_step = pmap(training_step, 'batch', static_broadcasted_argnums=0)
 
-# def samples_set_latents():
     
 def train_loop(H, optimizer, ema, state, logprint):
     rng = random.PRNGKey(H.seed_train)
@@ -56,12 +55,11 @@ def train_loop(H, optimizer, ema, state, logprint):
     ds_train = input_pipeline.get_ds(H, mode='train')
     ds_valid = input_pipeline.get_ds(H, mode='test')
     stats = []
-    training_step = p_training_step
     for data in input_pipeline.prefetch(ds_train, n_prefetch=2): # why 2?
         rng, iter_rng = random.split(rng)
         iter_rng = random.split(iter_rng, H.device_count)   
         t0 = time.time()
-        optimizer, ema, state, training_stats = training_step(
+        optimizer, ema, state, training_stats = p_training_step(
             H, data['image'], optimizer, ema, state, iter_rng)
         training_stats = device_get(
             tree_map(lambda x: x[0], training_stats))

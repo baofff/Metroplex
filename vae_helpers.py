@@ -85,15 +85,6 @@ def checkpoint(fun, H, args):
     else:
         return fun(*args)
 
-def astype(x, H):
-    if H.dtype == 'bfloat16':
-        return x.astype(jnp.bfloat16)
-    elif H.dtype == 'float32':
-        return x.astype(jnp.float32)
-    else:
-        raise NotImplementedError
-
-
 # Want to be able to vary the scale of initialized parameters
 def lecun_normal(scale):
     return nn.initializers.variance_scaling(
