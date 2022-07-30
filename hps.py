@@ -1,14 +1,13 @@
 import dataclasses
 import jax
-import jax.numpy as jnp
-import json 
+import json
 
 @dataclasses.dataclass(frozen=True)
 class Hyperparams:
     # general
     hps: str = None
-    run_opt: str = 'train' # or 'eval', 'get_latents',  
-    model: str = 'vdvae' # or 'vqvae'
+    run_opt: str = 'train'
+    model: str = 'vqvae'
     desc: str = 'test' # description of run
     device_count: int = jax.local_device_count()
     host_count: int = jax.host_count()
@@ -23,14 +22,13 @@ class Hyperparams:
     warmup_iters: float = 100.
     wd: float = 0.
     grad_clip: float = 200.
-    skip_threshold: float = 400. # vdvae only        
     dtype: str = "float32" # setting this to bfloat16 affects the performance :(
     checkpoint: bool = False # gradient checkpointing
         
     # training misc.
     iters_per_ckpt: int = 25000
-    iters_per_images: int = 10000
-    iters_per_print: int = 1000
+    iters_per_images: int = 100
+    iters_per_print: int = 10
     iters_per_save: int = 10000
         
     # architecture -------------------------
@@ -54,25 +52,11 @@ class Hyperparams:
     '''
     Example:
     
-    VDVAE (m = upsample, d = down)
-    "dec_blocks": "1x2,4m1,4x1,8m4,8x1,16m8,16x1,32m16,32x1,64m32,64x1,128m64,128x1,256m128,256x1",
-    "enc_blocks": "256x1,256d2,128x1,128d2,64x1,64d2,32x1,32d2,16x1,16d2,8x1,8d2,4x1,4d4,1x2",
-    
     VQVAE (d = up (decoder) or down (encoder)) 
     "dec_blocks": "32x1,32d2,64x1,64d2,128x1,128d2,256x2",
     "enc_blocks": "256x1,256d2,128x1,128d2,64x1,64d2,32x2",   
-    
-    Caveats: DCVAE doesn't use these hparams.
+
     '''
-    
-    # for dcvae only
-    gan: bool = False
-    gamma: float = 0
-    contra_resos: str = ''
-    gan_resos: str = ''
-    loss_type: str = 'NS'
-    patch_nce: bool = False
-    blocks_per_res: int = 1
     
     # -------------------------------------
     
@@ -84,7 +68,7 @@ class Hyperparams:
     n_channels: int = 3
     image_size: int = None
     split_train: str = 'train'
-    split_test: str = 'validation'
+    split_test: str = 'test'
     data_root: str = './'
     dataset: str = None
     shuffle_buffer: int = 50000

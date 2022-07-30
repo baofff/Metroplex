@@ -1,9 +1,7 @@
 from functools import partial
 import jax.numpy as jnp
 from flax import linen as nn
-from jax import random, lax
 from vae_helpers import parse_layer_string, pad_channels, get_width_settings, Conv1x1, Conv3x3, EncBlock, checkpoint, astype, recon_loss, sample
-from einops import repeat, rearrange
 from quantizer import VectorQuantizerEMA
 import hps
 import numpy as np
@@ -59,13 +57,12 @@ class VQVAE(nn.Module):
                           num_embeddings=H.codebook_size,
                           commitment_cost=0.25,
                           decay=0.99,
-                          cross_replica_axis='batch') # we set dtype = float32 here
+                          cross_replica_axis='batch')
         self.decoder = BasicUnit(H, 'decoder', min_res=H.vq_res)
 
     def __call__(self, x, is_training=False, **kwargs):
         x_target = jnp.array(x)
         x = self.encoder(x, train=is_training)
-        input_dtype = x.dtype
         rng = kwargs['rng'] if 'rng' in kwargs.keys() else None
         quant_dict = self.quantizer(x.astype(jnp.float32), is_training, rng=rng)
         kl = astype(quant_dict['loss'], self.H)

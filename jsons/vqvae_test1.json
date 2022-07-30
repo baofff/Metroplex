@@ -4,7 +4,7 @@
     "dec_blocks": "32x1,32d2,64x1,64d2,128x1,128d2,256x2",
     "enc_blocks": "256x1,256d2,128x1,128d2,64x1,64d2,32x2",
     "codebook_size": 2048,
-    "dataset": "lsun/church_outdoor",
+    "dataset": "cifar10",
     "model": "vqvae",
     "name": "vqvae1",
     "image_size": 256,

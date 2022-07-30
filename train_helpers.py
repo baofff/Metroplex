@@ -1,4 +1,4 @@
-import torch
+# import torch
 import numpy as np
 import dataclasses
 import argparse
@@ -7,11 +7,9 @@ import subprocess
 import time
 
 from jax.interpreters.xla import DeviceArray
-from tensorflow.io import gfile
 from hps import Hyperparams, parse_args_and_update_hparams, add_vae_arguments
 from utils import logger, mkdir_p, model_fn
 
-from jax import lax
 import jax
 from jax import random
 import jax.numpy as jnp
@@ -26,7 +24,6 @@ from vae_helpers import astype, sample
 import input_pipeline
 from einops import rearrange
 map = safe_map
-from gan_helpers import Discriminator
 
 
 def save_model(path, optimizer, ema, state, H):
@@ -56,16 +53,6 @@ def load_vaes(H, logprint):
     ema = params if H.ema_rate != 0 else {}
     optimizer = Adam(weight_decay=H.wd, beta1=H.adam_beta1,
                      beta2=H.adam_beta2).create(params)
-    if H.gan:
-        variables_d = Discriminator(H).init({'params': init_rng}, init_batch, rng=init_eval_rng)
-        state_d, params_d = variables_d.pop('params')
-        #print(jax.tree_map(jnp.shape, state))
-        del variables_d
-        optimizer_d = Adam(weight_decay=H.wd, beta1=H.adam_beta1,
-                         beta2=H.adam_beta2).create(params_d)
-        optimizer = dict(G=optimizer, D=optimizer_d)
-        state = dict(G=state, D=state_d)
-        ema = dict(params=ema, state=state['G']) if H.ema_rate != 0 else {}
     
     if H.restore_path and H.restore_iter > 0:
         logprint(f'Restoring vae from {H.restore_path}')
@@ -74,11 +61,11 @@ def load_vaes(H, logprint):
             ema = checkpoints.restore_checkpoint(H.restore_path + '_ema', ema, step=H.restore_iter)
         if state:
             state = checkpoints.restore_checkpoint(H.restore_path + '_state', state, step=H.restore_iter)
-    if not H.gan:
-        total_params = 0
-        for p in jax.tree_flatten(optimizer.target)[0]:
-            total_params += np.prod(p.shape)
-        logprint(total_params=total_params, readable=f'{total_params:,}')
+
+    total_params = 0
+    for p in jax.tree_flatten(optimizer.target)[0]:
+        total_params += np.prod(p.shape)
+    logprint(total_params=total_params, readable=f'{total_params:,}')
     optimizer = jax_utils.replicate(optimizer)
     if ema:
         ema = jax_utils.replicate(ema)        
@@ -159,45 +146,8 @@ def clip_grad_norm(g, max_norm):
     g = [clip_coeff * g_ for g_ in g]
     return treedef.unflatten(g), total_norm
 
-def get_latents_step(H, optimizer, ema, state, data, rng):
-    params = ema or optimizer.target
-    ema_apply = partial(model_fn(H).apply, {'params': params, **state}) 
-    forward_get_latents = partial(ema_apply, method=model_fn(H).forward_get_latents)
-    zs = forward_get_latents(data, rng)
-    return forward_samples_set_latents(zs)
-
-p_get_latents_step = pmap(get_latents_step, 'batch', static_broadcasted_argnums=0)
-    
-def get_latents_loop(H, optimizer, ema, state, logprint, mode):
-    rng = random.PRNGKey(H.seed_train)
-    iterate = 0    
-    ds = input_pipeline.get_ds(H, mode=mode)
-    stats = []
-    for data in input_pipeline.prefetch(ds, n_prefetch=2):
-        rng, iter_rng = random.split(rng)
-        iter_rng = random.split(iter_rng, H.device_count)   
-        t0 = time.time()
-        latents = p_get_latents_step(H, optimizer, ema, state, data['image'], iter_rng)
-        save_latents(latents, data['text'])
-        stats.append({'iter_time': time.time() - t0})
-        if (iterate % H.iters_per_print == 0
-                or (iters_since_starting in early_evals)):
-            logprint(model=H.desc, type='get_latents',
-                      step=iterate,
-                      **accumulate_stats(stats, H.iters_per_print))
-        iterate += 1
-
 def write_images(H, optimizer, ema, state, viz_batch):
-    rng = random.PRNGKey(H.seed_sample)
-    if H.gan:
-        if ema:
-            params = ema['params']
-            state = ema['state']
-        else:
-            params = optimizer['G'].target
-            state = state['G']
-    else:
-        params = ema or optimizer.target
+    params = ema or optimizer.target
     ema_apply = partial(model_fn(H).apply,
                         {'params': params, **state}) 
     forward_get_latents = partial(ema_apply, method=model_fn(H).forward_get_latents)
@@ -206,20 +156,8 @@ def write_images(H, optimizer, ema, state, viz_batch):
 
     batches = [sample(viz_batch)]
     mb = viz_batch.shape[0]
-    if H.model == 'vdvae':
-        forward_uncond_samples = partial(
-        ema_apply, method=model_fn(H).forward_uncond_samples)
-        zs = [s['z'] for s in forward_get_latents(viz_batch, rng)]
-        lv_points = np.floor(
-            np.linspace(
-                0, 1, H.num_variables_visualize + 2) * len(zs)).astype(int)[1:-1]
-        for i in lv_points:
-            batches.append(forward_samples_set_latents(mb, zs[:i], rng, t=0.1))
-        for t in [1.0, 0.9, 0.8]:
-            batches.append(forward_uncond_samples(mb, rng, t=t))
-    else:
-        zs = forward_get_latents(viz_batch)
-        batches.append(forward_samples_set_latents(zs))
+    zs = forward_get_latents(viz_batch)
+    batches.append(forward_samples_set_latents(zs))
     im = jnp.stack(batches)
     return im
 
