@@ -36,7 +36,7 @@ class Attention(nn.Module):
 
     def setup(self):
         H = self.H
-        self.attention = nn.SelfAttention(num_heads=H.num_heads, dtype=H.dtype)
+        self.attention = nn.SelfAttention(num_heads=H.num_heads)
 
     def __call__(self, x):
         res = x
@@ -104,13 +104,12 @@ class Block(nn.Module):
     def __call__(self, x, train=True):
         H = self.H
         residual = self.residual
-        Conv1x1_ = partial(Conv1x1, dtype=H.dtype)
-        Conv3x3_ = partial(Conv3x3 if self.use_3x3 else Conv1x1, dtype=H.dtype)
+        Conv3x3_ = Conv3x3 if self.use_3x3 else Conv1x1
         if H.block_type == 'bottleneck':
-            x_ = Conv1x1_(self.middle_width)(nn.gelu(x))
+            x_ = Conv1x1(self.middle_width)(nn.gelu(x))
             x_ = Conv3x3_(self.middle_width)(nn.gelu(x_))
             x_ = Conv3x3_(self.middle_width)(nn.gelu(x_))
-            x_ = Conv1x1_(
+            x_ = Conv1x1(
                 self.out_width, kernel_init=lecun_normal(self.last_scale))(
                     nn.gelu(x_))
         elif H.block_type == 'diffusion':

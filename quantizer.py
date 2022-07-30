@@ -8,14 +8,12 @@ import jax.numpy as jnp
 
 class ExponentialMovingAverage(nn.Module):
   shape: list
-  dtype: Any = jnp.float32
   decay: float = 0.
 
   def setup(self):
     shape = self.shape
-    dtype = self.dtype
-    self.hidden = self.variable("stats", "hidden", lambda: jnp.zeros(shape, dtype=dtype))
-    self.average = self.variable("stats", "average", lambda: jnp.zeros(shape, dtype=dtype)) # how to deal with initialized?
+    self.hidden = self.variable("stats", "hidden", lambda: jnp.zeros(shape))
+    self.average = self.variable("stats", "average", lambda: jnp.zeros(shape)) # how to deal with initialized?
     constant = lambda: jnp.zeros(shape, dtype=jnp.int32)
     self.counter = self.variable("stats", "counter", constant)
 
@@ -47,17 +45,17 @@ class VectorQuantizerEMA(nn.Module):
   commitment_cost: float
   decay: float
   epsilon: float = 1e-5
-  dtype: Any = jnp.float32
-  cross_replica_axis: Optional[str] = None  
+  cross_replica_axis: Optional[str] = None
   initialized: bool = False
 
   @nn.compact
-  def __call__(self, inputs, is_training, rng=None, encoding_indices=None):
+  def __call__(self, inputs, is_training, encoding_indices=None):
     embedding_shape = [self.embedding_dim, self.num_embeddings]
-    assert self.dtype == jnp.float32
-    ema_cluster_size = ExponentialMovingAverage([self.num_embeddings], self.dtype, decay=self.decay)
-    ema_dw = ExponentialMovingAverage(embedding_shape, self.dtype, decay=self.decay)
+    ema_cluster_size = ExponentialMovingAverage([self.num_embeddings], decay=self.decay)
+    ema_dw = ExponentialMovingAverage(embedding_shape, decay=self.decay)
     initialized = self.has_variable('stats', 'embeddings')
+    assert not (is_training and not initialized)
+    rng = self.make_rng('stats') if not initialized else None
     embeddings = self.variable("stats", "embeddings", nn.initializers.lecun_uniform(), rng, embedding_shape)
     
     def quantize(encoding_indices):
@@ -68,14 +66,6 @@ class VectorQuantizerEMA(nn.Module):
 
     if encoding_indices is not None:
         return quantize(encoding_indices)
-    
-    if not initialized:
-        hidden, counter, average = ema_cluster_size.hidden, ema_cluster_size.counter, ema_cluster_size.average
-        hidden, counter, average = ema_dw.hidden, ema_dw.counter, ema_dw.average     
-        return {
-            "quantize": inputs,
-            "loss": inputs.mean(),
-        }
     
     flat_inputs = jnp.reshape(inputs, [-1, self.embedding_dim])
     distances = (
@@ -91,6 +81,7 @@ class VectorQuantizerEMA(nn.Module):
     encoding_indices = jnp.reshape(encoding_indices, inputs.shape[:-1])
     quantized = quantize(encoding_indices)
     e_latent_loss = jnp.mean((jax.lax.stop_gradient(quantized) - inputs)**2)
+    loss = self.commitment_cost * e_latent_loss
 
     if is_training:
       cluster_size = jnp.sum(encodings, axis=0)
@@ -112,15 +103,11 @@ class VectorQuantizerEMA(nn.Module):
           updated_ema_dw / jnp.reshape(updated_ema_cluster_size, [1, -1]))
 
       embeddings.value = normalised_updated_ema_w
-      loss = self.commitment_cost * e_latent_loss
-
-    else:
-      loss = self.commitment_cost * e_latent_loss
 
     # Straight Through Estimator
     quantized = inputs + jax.lax.stop_gradient(quantized - inputs)
     avg_probs = jnp.mean(encodings, 0)
-    if self.cross_replica_axis:
+    if self.cross_replica_axis and is_training:
       avg_probs = jax.lax.pmean(avg_probs, axis_name=self.cross_replica_axis)
     perplexity = jnp.exp(-jnp.sum(avg_probs * jnp.log(avg_probs + 1e-10)))
 

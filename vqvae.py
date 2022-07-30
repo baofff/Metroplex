@@ -25,7 +25,7 @@ class BasicUnit(nn.Module):
             raise NotImplementedError
         widths = get_width_settings(H.custom_width_str)
         blocks = parse_layer_string(block_str)
-        x = Conv3x3(widths[str(blocks[0][0])], dtype=H.dtype)(x)
+        x = Conv3x3(widths[str(blocks[0][0])])(x)
         for res, down_rate in blocks:
             if res < self.min_res:
                 continue
@@ -40,7 +40,7 @@ class BasicUnit(nn.Module):
             elif x.shape[3] > new_width:
                 x = x[..., :new_width]
         if module_type == 'decoder':
-            x = Conv1x1(H.n_channels, dtype=H.dtype)(x)
+            x = Conv1x1(H.n_channels)(x)
         return x
         
 
@@ -60,15 +60,14 @@ class VQVAE(nn.Module):
                           cross_replica_axis='batch')
         self.decoder = BasicUnit(H, 'decoder', min_res=H.vq_res)
 
-    def __call__(self, x, is_training=False, **kwargs):
+    def __call__(self, x, is_training=False):
         x_target = jnp.array(x)
         x = self.encoder(x, train=is_training)
-        rng = kwargs['rng'] if 'rng' in kwargs.keys() else None
-        quant_dict = self.quantizer(x.astype(jnp.float32), is_training, rng=rng)
+        quant_dict = self.quantizer(x.astype(jnp.float32), is_training)
         kl = quant_dict['loss'].astype(jnp.float32)
         px_z = self.decoder(quant_dict['quantize'].astype(jnp.float32), train=is_training)
         loss = recon_loss(px_z, x_target)
-        return dict(loss=loss + kl, recon_loss=loss, kl=kl), None
+        return dict(loss=loss + kl, recon_loss=loss, kl=kl)
 
     def forward_get_latents(self, x):
         x = self.encoder(x).astype(jnp.float32)
@@ -76,5 +75,6 @@ class VQVAE(nn.Module):
 
     def forward_samples_set_latents(self, latents):
         latents = self.quantizer(None, is_training=False, encoding_indices=latents)
+        print('latents', latents.dtype)
         px_z = self.decoder(latents.astype(jnp.float32))
         return sample(px_z)

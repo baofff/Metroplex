@@ -22,7 +22,6 @@ class Hyperparams:
     warmup_iters: float = 100.
     wd: float = 0.
     grad_clip: float = 200.
-    dtype: str = "float32" # setting this to bfloat16 affects the performance :(
     checkpoint: bool = False # gradient checkpointing
         
     # training misc.
@@ -97,10 +96,6 @@ class Hyperparams:
     
     # seed
     seed: int = 0
-    seed_eval: int = None
-    seed_init: int = None
-    seed_sample: int = None
-    seed_train: int = None
 
 
 def parse_args_and_update_hparams(H, parser, s=None):

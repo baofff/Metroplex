@@ -11,14 +11,14 @@ import input_pipeline
 from vqvae import VQVAE
 
 
-def training_step(H, data, optimizer, ema, state, rng):
+def training_step(H, data, optimizer, ema, state):
 
     def loss_fun(params, state):
-        (stats, contra), state = VQVAE(H).apply({'params': params, **state}, data.astype(jnp.float32),
-                                                rng=rng, is_training=True, mutable=list(state.keys()))
-        loss = stats['loss']
-        stats = {k: v.astype(jnp.float32) for k, v in stats.items()}
-        return loss, (stats, state)
+        output, new_state = VQVAE(H).apply({'params': params, **state}, data.astype(jnp.float32),
+                                             is_training=True, mutable=list(state.keys()))
+        loss = output['loss']
+        output = {k: v.astype(jnp.float32) for k, v in output.items()}
+        return loss, (output, new_state)
 
     gradval, (stats, state) = grad(loss_fun, has_aux=True)(optimizer.target, state)
     stats, gradval = lax.pmean((stats, gradval), 'batch')
@@ -45,22 +45,19 @@ def training_step(H, data, optimizer, ema, state, rng):
     optimizer, ema = update(gradval)
     stats.update(grad_norm=grad_norm)
     return optimizer, ema, state, stats
-# Would use donate_argnums=(3, 4) here but compilation never finishes
+
 p_training_step = pmap(training_step, 'batch', static_broadcasted_argnums=0)
 
     
 def train_loop(H, optimizer, ema, state, logprint):
-    rng = random.PRNGKey(H.seed_train)
     iterate = int(optimizer.state.step[0])
     ds_train = input_pipeline.get_ds(H, mode='train')
     ds_valid = input_pipeline.get_ds(H, mode='test')
     stats = []
     for data in input_pipeline.prefetch(ds_train, n_prefetch=2): # why 2?
-        rng, iter_rng = random.split(rng)
-        iter_rng = random.split(iter_rng, H.device_count)   
         t0 = time.time()
         optimizer, ema, state, training_stats = p_training_step(
-            H, data['image'], optimizer, ema, state, iter_rng)
+            H, data['image'], optimizer, ema, state)
         training_stats = device_get(
             tree_map(lambda x: x[0], training_stats))
         training_stats['iter_time'] = time.time() - t0
@@ -91,7 +88,9 @@ def train_loop(H, optimizer, ema, state, logprint):
 
 def main():
     H, logprint = set_up_hyperparams()
-    optimizer, ema, state = load_vaes(H, logprint)
+    rng = random.PRNGKey(H.seed)
+    rng, rng_init = random.split(rng)
+    optimizer, ema, state = load_vaes(H, rng_init, logprint)
     train_loop(H, optimizer, ema, state, logprint)
         
 if __name__ == "__main__":

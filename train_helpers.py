@@ -42,18 +42,14 @@ def save_model(path, optimizer, ema, state, H):
     subprocess.check_output(['cp', from_log, to_log])
 
 
-def load_vaes(H, logprint):
-    rng = random.PRNGKey(H.seed_init)
-    init_rng, init_eval_rng = random.split(rng)
-    init_eval_rng, init_emb_rng = random.split(init_eval_rng)
+def load_vaes(H, rng, logprint):
+    params_rng, stats_rng = random.split(rng)
     init_batch = jnp.zeros((1, H.image_size, H.image_size, H.n_channels))
-    variables = VQVAE(H).init({'params': init_rng}, init_batch, rng=init_eval_rng)
+    variables = VQVAE(H).init({'params': params_rng, 'stats': stats_rng}, init_batch, is_training=False)
     state, params = variables.pop('params')
-    #print(jax.tree_map(jnp.shape, state))
     del variables
     ema = params if H.ema_rate != 0 else {}
-    optimizer = Adam(weight_decay=H.wd, beta1=H.adam_beta1,
-                     beta2=H.adam_beta2).create(params)
+    optimizer = Adam(weight_decay=H.wd, beta1=H.adam_beta1, beta2=H.adam_beta2).create(params)
     
     if H.restore_path and H.restore_iter > 0:
         logprint(f'Restoring vae from {H.restore_path}')
@@ -130,13 +126,6 @@ def set_up_hyperparams(s=None):
             logprint(type='hparam', key=k, value=getattr(H, k))
     np.random.seed(H.seed)
     logprint('training model', H.desc, 'on', H.dataset)
-    H = dataclasses.replace(
-        H,
-        seed_init  =H.seed,
-        seed_sample=H.seed + 1,
-        seed_train =H.seed + 2 + H.host_id,
-        seed_eval  =H.seed + 2 + H.host_count + H.host_id,
-    )
     return H, logprint
 
 def clip_grad_norm(g, max_norm):
