@@ -63,18 +63,17 @@ class VQVAE(nn.Module):
     def __call__(self, x, is_training=False):
         x_target = jnp.array(x)
         x = self.encoder(x, train=is_training)
-        quant_dict = self.quantizer(x.astype(jnp.float32), is_training)
-        kl = quant_dict['loss'].astype(jnp.float32)
-        px_z = self.decoder(quant_dict['quantize'].astype(jnp.float32), train=is_training)
+        quant_dict = self.quantizer(x, is_training)
+        kl = quant_dict['loss']
+        px_z = self.decoder(quant_dict['quantize'], train=is_training)
         loss = recon_loss(px_z, x_target)
         return dict(loss=loss + kl, recon_loss=loss, kl=kl)
 
     def forward_get_latents(self, x):
-        x = self.encoder(x).astype(jnp.float32)
+        x = self.encoder(x)
         return self.quantizer(x, is_training=False)['encoding_indices'].astype(jnp.int32)
 
     def forward_samples_set_latents(self, latents):
         latents = self.quantizer(None, is_training=False, encoding_indices=latents)
-        print('latents', latents.dtype)
-        px_z = self.decoder(latents.astype(jnp.float32))
+        px_z = self.decoder(latents)
         return sample(px_z)

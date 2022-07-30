@@ -14,10 +14,9 @@ from vqvae import VQVAE
 def training_step(H, data, optimizer, ema, state):
 
     def loss_fun(params, state):
-        output, new_state = VQVAE(H).apply({'params': params, **state}, data.astype(jnp.float32),
+        output, new_state = VQVAE(H).apply({'params': params, **state}, data,
                                              is_training=True, mutable=list(state.keys()))
         loss = output['loss']
-        output = {k: v.astype(jnp.float32) for k, v in output.items()}
         return loss, (output, new_state)
 
     gradval, (stats, state) = grad(loss_fun, has_aux=True)(optimizer.target, state)
