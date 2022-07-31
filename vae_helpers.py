@@ -26,7 +26,7 @@ def resize(img, shape):
     return image.resize(img, (n,) + shape + (c,), 'nearest')
 
 def recon_loss(px_z, x):
-    return jnp.abs(px_z - x).mean()
+    return jnp.square(px_z - x).mean()
 
 def sample(px_z):
     return jnp.round((jnp.clip(px_z, -1, 1) + 1) * 127.5).astype(jnp.uint8)

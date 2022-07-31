@@ -33,8 +33,8 @@ class Hyperparams:
     
     # for all settings
     custom_width_str: str = ''
-    vq_res: int = 32
     codebook_size: int = None
+    vq_dim: int = 256
 
     # for vq/vdvae only
     block_type: str = "bottleneck"

@@ -7,7 +7,6 @@ import hps
 class BasicUnit(nn.Module):
     H: hps.Hyperparams
     module_type: str 
-    min_res: int = 1
 
     @nn.compact
     def __call__(self, x, train=False):
@@ -27,7 +26,6 @@ class BasicUnit(nn.Module):
         x = Conv3x3(widths[blocks[0][0]])(x)
         for res, spatial_scale in blocks:  # res is the current resolution, spatial_scale is to generate next resolution
             assert x.shape[1] == res
-            assert res >= self.min_res, f'res={res}, min_res={self.min_res}'
             use_3x3 = res > 2  # Don't use 3x3s for 1x1, 2x2 patches
             block = EncBlock(H, res, use_3x3, spatial_scale or 1, up=up)
             x = block(x, train=train)
@@ -47,16 +45,14 @@ class VQVAE(nn.Module):
 
     def setup(self):
         H = self.H
-        widths = get_width_settings(H.custom_width_str)
-        vq_dim = widths[H.vq_res]
-        self.encoder = BasicUnit(H, 'encoder', min_res=H.vq_res)
+        self.encoder = BasicUnit(H, 'encoder')
         self.quantizer = VectorQuantizerEMA(
-                          embedding_dim=vq_dim,
+                          embedding_dim=H.vq_dim,
                           num_embeddings=H.codebook_size,
                           commitment_cost=0.25,
                           decay=0.99,
                           cross_replica_axis='batch')
-        self.decoder = BasicUnit(H, 'decoder', min_res=H.vq_res)
+        self.decoder = BasicUnit(H, 'decoder')
 
     def __call__(self, x, is_training=False):
         x_target = jnp.array(x)
