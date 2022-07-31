@@ -61,7 +61,8 @@ class VQVAE(nn.Module):
         kl = quant_dict['loss']
         px_z = self.decoder(quant_dict['quantize'], train=is_training)
         loss = recon_loss(px_z, x_target)
-        return dict(loss=loss + kl, recon_loss=loss, kl=kl)
+        return dict(loss=loss + kl, recon_loss=loss, kl=kl, entropy=jnp.log(quant_dict['perplexity']),
+                    entropy_ub=jnp.log(self.H.codebook_size))
 
     def forward_get_latents(self, x):
         x = self.encoder(x)
