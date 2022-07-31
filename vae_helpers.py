@@ -93,7 +93,9 @@ class Block(nn.Module):
     @nn.compact
     def __call__(self, x, train=True):
         width = x.shape[-1]
-        middle_width = int(width * self.bottleneck_multiple)
+        middle_width = width * self.bottleneck_multiple
+        assert middle_width.is_integer()
+        middle_width = int(middle_width)
         Conv3x3_ = Conv3x3 if self.use_3x3 else Conv1x1
         if self.block_type == 'bottleneck':
             x_ = Conv1x1(middle_width)(nn.gelu(x))
