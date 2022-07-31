@@ -56,7 +56,11 @@ class VectorQuantizerEMA(nn.Module):
     assert not (is_training and not initialized)
     rng = self.make_rng('stats') if not initialized else None
     embeddings = self.variable("stats", "embeddings", nn.initializers.lecun_uniform(), rng, embedding_shape)
-    
+
+    if not initialized:  # force the initialization to output below states
+      _, _, _ = ema_cluster_size.hidden, ema_cluster_size.counter, ema_cluster_size.average
+      _, _, _ = ema_dw.hidden, ema_dw.counter, ema_dw.average
+
     def quantize(encoding_indices):
         """Returns embedding tensor for a batch of indices."""
         w = embeddings.value.swapaxes(1, 0)
