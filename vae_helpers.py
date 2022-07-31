@@ -79,12 +79,6 @@ def normalize(x, type=None, train=False):
     else:
         return x
 
-def checkpoint(fun, H, args):
-    if H.checkpoint:
-        return jax.checkpoint(fun)(*args)
-    else:
-        return fun(*args)
-
 # Want to be able to vary the scale of initialized parameters
 def lecun_normal(scale):
     return nn.initializers.variance_scaling(

@@ -1,7 +1,7 @@
 from functools import partial
 import jax.numpy as jnp
 from flax import linen as nn
-from vae_helpers import parse_layer_string, pad_channels, get_width_settings, Conv1x1, Conv3x3, EncBlock, checkpoint, recon_loss, sample
+from vae_helpers import parse_layer_string, pad_channels, get_width_settings, Conv1x1, Conv3x3, EncBlock, recon_loss, sample
 from quantizer import VectorQuantizerEMA
 import hps
 import numpy as np
@@ -32,7 +32,7 @@ class BasicUnit(nn.Module):
             use_3x3 = res > 2  # Don't use 3x3s for 1x1, 2x2 patches
             width = widths.get(str(res), H.width)
             block = EncBlock(H, res, width, down_rate or 1, use_3x3, last_scale=np.sqrt(1 / len(blocks)), up=up)
-            x = checkpoint(partial(block.__call__, train=train), H, (x,)) #TODO: needs to be fixed for batchnorm
+            x = block(x, train=train)
             new_res = x.shape[1]
             new_width = widths.get(str(new_res), H.width)
             if x.shape[3] < new_width:

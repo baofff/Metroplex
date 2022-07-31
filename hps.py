@@ -22,8 +22,7 @@ class Hyperparams:
     warmup_iters: float = 100.
     wd: float = 0.
     grad_clip: float = 200.
-    checkpoint: bool = False # gradient checkpointing
-        
+
     # training misc.
     iters_per_ckpt: int = 25000
     iters_per_images: int = 100
