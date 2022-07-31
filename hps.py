@@ -32,7 +32,6 @@ class Hyperparams:
     # architecture -------------------------
     
     # for all settings
-    width: int = 512 # width of the highest-res layer (should match with H.dec/enc_blocks below)
     custom_width_str: str = ''
     vq_res: int = 32
     codebook_size: int = None

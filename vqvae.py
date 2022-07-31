@@ -30,11 +30,10 @@ class BasicUnit(nn.Module):
             if res < self.min_res:
                 continue
             use_3x3 = res > 2  # Don't use 3x3s for 1x1, 2x2 patches
-            width = widths.get(str(res), H.width)
-            block = EncBlock(H, res, width, down_rate or 1, use_3x3, last_scale=np.sqrt(1 / len(blocks)), up=up)
+            block = EncBlock(H, res, down_rate or 1, use_3x3, up=up)
             x = block(x, train=train)
             new_res = x.shape[1]
-            new_width = widths.get(str(new_res), H.width)
+            new_width = widths[str(new_res)]
             if x.shape[3] < new_width:
                 x = pad_channels(x, new_width)
             elif x.shape[3] > new_width:
@@ -42,7 +41,7 @@ class BasicUnit(nn.Module):
         if module_type == 'decoder':
             x = Conv1x1(H.n_channels)(x)
         return x
-        
+
 
 class VQVAE(nn.Module):
     H: hps.Hyperparams

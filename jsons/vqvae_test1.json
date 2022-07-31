@@ -1,6 +1,5 @@
 {
     "custom_width_str": "256:128,128:256,64:512,32:512",
-    "width": 128,
     "dec_blocks": "32x1,32d2,64x1,64d2,128x1,128d2,256x2",
     "enc_blocks": "256x1,256d2,128x1,128d2,64x1,64d2,32x2",
     "codebook_size": 2048,

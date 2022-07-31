@@ -81,44 +81,33 @@ def normalize(x, type=None, train=False):
 
 # Want to be able to vary the scale of initialized parameters
 def lecun_normal(scale):
-    return nn.initializers.variance_scaling(
-        scale, 'fan_in', 'truncated_normal')
+    return nn.initializers.variance_scaling(scale, 'fan_in', 'truncated_normal')
 
 class Block(nn.Module):
-    H: hps.Hyperparams
-    middle_width: int
-    out_width: int
-    down_rate: int = 1
-    residual: bool = False
+    block_type: str
+    bottleneck_multiple: int
     use_3x3: bool = True
-    last_scale: bool = 1.
+    spatial_scale: int = 1
     up: bool = False
 
     @nn.compact
     def __call__(self, x, train=True):
-        H = self.H
-        residual = self.residual
+        width = x.shape[-1]
+        middle_width = int(width * self.bottleneck_multiple)
         Conv3x3_ = Conv3x3 if self.use_3x3 else Conv1x1
-        if H.block_type == 'bottleneck':
-            x_ = Conv1x1(self.middle_width)(nn.gelu(x))
-            x_ = Conv3x3_(self.middle_width)(nn.gelu(x_))
-            x_ = Conv3x3_(self.middle_width)(nn.gelu(x_))
-            x_ = Conv1x1(
-                self.out_width, kernel_init=lecun_normal(self.last_scale))(
-                    nn.gelu(x_))
-        elif H.block_type == 'diffusion':
-            middle_width = int(self.middle_width / H.bottleneck_multiple)
-            x_ = Conv3x3_(middle_width)(nn.gelu(x))
-            x_ = Conv3x3_(
-                self.out_width, kernel_init=lecun_normal(self.last_scale))(
-                    nn.gelu(x_))
-                
-        out = x + x_ if residual else x_
-        if self.down_rate > 1:
+        if self.block_type == 'bottleneck':
+            x_ = Conv1x1(middle_width)(nn.gelu(x))
+            x_ = Conv3x3_(middle_width)(nn.gelu(x_))
+            x_ = Conv3x3_(middle_width)(nn.gelu(x_))
+            x_ = Conv1x1(width, kernel_init=lecun_normal(1))(nn.gelu(x_))
+        else:
+            raise NotImplementedError
+        out = x + x_
+        if self.spatial_scale > 1:
             if self.up:
-                out = repeat(out, 'b h w c -> b (h x) (w y) c', x=self.down_rate, y=self.down_rate)
+                out = repeat(out, 'b h w c -> b (h x) (w y) c', x=self.spatial_scale, y=self.spatial_scale)
             else:
-                window_shape = 2 * (self.down_rate,)
+                window_shape = 2 * (self.spatial_scale,)
                 out = nn.avg_pool(out, window_shape, window_shape)
         return out
 
@@ -129,18 +118,14 @@ def has_attn(res_, H):
 class EncBlock(nn.Module):
     H: hps.Hyperparams
     res: int
-    width: int
-    down_rate: int = 1
+    spatial_scale: int = 1
     use_3x3: bool = True
-    last_scale: bool = 1.
     up: bool = False
 
     def setup(self):
         H = self.H
-        width, use_3x3 = self.width, self.use_3x3        
-        middle_width = int(width * H.bottleneck_multiple)
         self.pre_layer = Attention(H) if has_attn(self.res, H) else identity
-        self.block1 = Block(H, middle_width, width, self.down_rate or 1, True, use_3x3, up=self.up)
+        self.block1 = Block(H.block_type, H.bottleneck_multiple, self.use_3x3, self.spatial_scale, up=self.up)
         
     def __call__(self, x, train=True):
         return self.block1(self.pre_layer(x), train=train)
