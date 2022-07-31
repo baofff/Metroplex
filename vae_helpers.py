@@ -1,11 +1,8 @@
 from functools import partial
-import jax 
 import jax.numpy as jnp
-import flax
 from flax import linen as nn
 from jax import random
 from jax import image
-from flax.core import freeze, unfreeze
 from einops import repeat
 import hps
 identity = lambda x: x

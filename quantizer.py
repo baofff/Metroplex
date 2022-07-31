@@ -46,7 +46,6 @@ class VectorQuantizerEMA(nn.Module):
   decay: float
   epsilon: float = 1e-5
   cross_replica_axis: Optional[str] = None
-  initialized: bool = False
 
   @nn.compact
   def __call__(self, inputs, is_training, encoding_indices=None):
