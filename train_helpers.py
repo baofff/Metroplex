@@ -29,7 +29,7 @@ map = safe_map
 
 def save_model(path, optimizer, ema, state, H):
     optimizer = jax_utils.unreplicate(optimizer)
-    step = optimizer.state.step if not H.gan else optimizer['G'].state.step  
+    step = optimizer.state.step
     checkpoints.save_checkpoint(path, optimizer, step)
     if ema:
         ema = jax_utils.unreplicate(ema)

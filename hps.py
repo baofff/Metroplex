@@ -35,15 +35,11 @@ class Hyperparams:
     custom_width_str: str = ''
     vq_res: int = 32
     codebook_size: int = None
-    uncond_sample: bool = False
 
     # for vq/vdvae only
-    pre_layer: bool = False
     block_type: str = "bottleneck"
     attn_res: str = ''
     bottleneck_multiple: float = 0.25
-    zdim: int = 16 
-    no_bias_above: int = 64
     enc_blocks: str = None
     dec_blocks: str = None
     '''

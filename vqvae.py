@@ -1,10 +1,8 @@
-from functools import partial
 import jax.numpy as jnp
 from flax import linen as nn
 from vae_helpers import parse_layer_string, pad_channels, get_width_settings, Conv1x1, Conv3x3, EncBlock, recon_loss, sample
 from quantizer import VectorQuantizerEMA
 import hps
-import numpy as np
 
 class BasicUnit(nn.Module):
     H: hps.Hyperparams
@@ -25,15 +23,16 @@ class BasicUnit(nn.Module):
             raise NotImplementedError
         widths = get_width_settings(H.custom_width_str)
         blocks = parse_layer_string(block_str)
-        x = Conv3x3(widths[str(blocks[0][0])])(x)
-        for res, down_rate in blocks:
-            if res < self.min_res:
-                continue
+        assert x.shape[1] == blocks[0][0]
+        x = Conv3x3(widths[blocks[0][0]])(x)
+        for res, spatial_scale in blocks:  # res is the current resolution, spatial_scale is to generate next resolution
+            assert x.shape[1] == res
+            assert res >= self.min_res, f'res={res}, min_res={self.min_res}'
             use_3x3 = res > 2  # Don't use 3x3s for 1x1, 2x2 patches
-            block = EncBlock(H, res, down_rate or 1, use_3x3, up=up)
+            block = EncBlock(H, res, use_3x3, spatial_scale or 1, up=up)
             x = block(x, train=train)
             new_res = x.shape[1]
-            new_width = widths[str(new_res)]
+            new_width = widths[new_res]
             if x.shape[3] < new_width:
                 x = pad_channels(x, new_width)
             elif x.shape[3] > new_width:
@@ -49,7 +48,7 @@ class VQVAE(nn.Module):
     def setup(self):
         H = self.H
         widths = get_width_settings(H.custom_width_str)
-        vq_dim = widths[str(H.vq_res)]
+        vq_dim = widths[H.vq_res]
         self.encoder = BasicUnit(H, 'encoder', min_res=H.vq_res)
         self.quantizer = VectorQuantizerEMA(
                           embedding_dim=vq_dim,

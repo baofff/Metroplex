@@ -68,7 +68,7 @@ def get_width_settings(s):
     if s:
         for ss in s.split(','):
             k, v = ss.split(':')
-            mapping[k] = int(v)
+            mapping[int(k)] = int(v)
     return mapping
 
 def normalize(x, type=None, train=False):
@@ -120,8 +120,8 @@ def has_attn(res_, H):
 class EncBlock(nn.Module):
     H: hps.Hyperparams
     res: int
-    spatial_scale: int = 1
     use_3x3: bool = True
+    spatial_scale: int = 1
     up: bool = False
 
     def setup(self):
